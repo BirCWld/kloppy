@@ -264,8 +264,8 @@ class MetricaJsonEventDataDeserializer(
             )
 
             transformer = self.get_transformer(
-                pitch_length=metadata.pitch_dimensions.pitch_length,
-                pitch_width=metadata.pitch_dimensions.pitch_width,
+                length=metadata.pitch_dimensions.length,
+                width=metadata.pitch_dimensions.width,
             )
 
         with performance_logging("parse data", logger=logger):

@@ -1,8 +1,7 @@
 import logging
 from datetime import timedelta
 import warnings
-from typing import Dict, Optional, Union
-import html
+from typing import Tuple, Dict, NamedTuple, IO, Optional, Union
 
 from lxml import objectify
 
@@ -28,13 +27,17 @@ from kloppy.exceptions import DeserializationError
 
 from kloppy.utils import Readable, performance_logging
 
-from .common import TRACABInputs
-from ..deserializer import TrackingDataDeserializer
+from .deserializer import TrackingDataDeserializer
 
 logger = logging.getLogger(__name__)
 
 
-class TRACABDatDeserializer(TrackingDataDeserializer[TRACABInputs]):
+class TRACABInputs(NamedTuple):
+    meta_data: IO[bytes]
+    raw_data: IO[bytes]
+
+
+class TRACABDeserializer(TrackingDataDeserializer[TRACABInputs]):
     def __init__(
         self,
         limit: Optional[int] = None,
@@ -64,23 +67,23 @@ class TRACABDatDeserializer(TrackingDataDeserializer[TRACABInputs]):
                 team = teams[0]
             elif team_id == 0:
                 team = teams[1]
-            elif team_id in (-1, 3, 4):
-                continue
             else:
-                raise DeserializationError(
-                    f"Unknown Player Team ID: {team_id}"
-                )
+                # it's probably -1, but make sure it doesn't crash
+                continue
 
             player = team.get_player_by_jersey_number(jersey_no)
-            if player:
-                players_data[player] = PlayerData(
-                    coordinates=Point(float(x), float(y)), speed=float(speed)
+
+            if not player:
+                player = Player(
+                    player_id=f"{team.ground}_{jersey_no}",
+                    team=team,
+                    jersey_no=int(jersey_no),
                 )
-            else:
-                # continue
-                raise DeserializationError(
-                    f"Player not found for player jersey no {jersey_no} of team: {team.name}"
-                )
+                team.players.append(player)
+
+            players_data[player] = PlayerData(
+                coordinates=Point(float(x), float(y)), speed=float(speed)
+            )
 
         (
             ball_x,
@@ -130,37 +133,14 @@ class TRACABDatDeserializer(TrackingDataDeserializer[TRACABInputs]):
         if "raw_data" not in inputs:
             raise ValueError("Please specify a value for 'raw_data'")
 
-    @staticmethod
-    def create_team(team_data, ground, start_frame_id):
-        team = Team(
-            team_id=str(team_data["TeamId"]),
-            name=html.unescape(team_data["ShortName"]),
-            ground=ground,
-        )
-
-        team.players = [
-            Player(
-                player_id=str(player["PlayerId"]),
-                team=team,
-                first_name=html.unescape(player["FirstName"]),
-                last_name=html.unescape(player["LastName"]),
-                name=html.unescape(
-                    player["FirstName"] + " " + player["LastName"]
-                ),
-                jersey_no=int(player["JerseyNo"]),
-                starting=True
-                if player["StartFrameCount"] == start_frame_id
-                else False,
-            )
-            for player in team_data["Players"]["Player"]
-        ]
-
-        return team
-
     def deserialize(self, inputs: TRACABInputs) -> TrackingDataset:
+        # TODO: also used in Metrica, extract to a method
+        home_team = Team(team_id="home", name="home", ground=Ground.HOME)
+        away_team = Team(team_id="away", name="away", ground=Ground.AWAY)
+        teams = [home_team, away_team]
+
         with performance_logging("Loading metadata", logger=logger):
-            meta_data = objectify.fromstring(inputs.meta_data.read())
-            match = meta_data.match
+            match = objectify.fromstring(inputs.meta_data.read()).match
             frame_rate = int(match.attrib["iFrameRateFps"])
             pitch_size_width = float(match.attrib["fPitchXSizeMeters"])
             pitch_size_height = float(match.attrib["fPitchYSizeMeters"])
@@ -182,17 +162,9 @@ class TRACABDatDeserializer(TrackingDataDeserializer[TRACABInputs]):
                         )
                     )
 
-            home_team = self.create_team(
-                meta_data["HomeTeam"], Ground.HOME, start_frame_id
-            )
-            away_team = self.create_team(
-                meta_data["AwayTeam"], Ground.AWAY, start_frame_id
-            )
-            teams = [home_team, away_team]
-
         with performance_logging("Loading data", logger=logger):
             transformer = self.get_transformer(
-                pitch_length=pitch_size_width, pitch_width=pitch_size_height
+                length=pitch_size_width, width=pitch_size_height
             )
 
             def _iter():

@@ -310,8 +310,13 @@ class StatsPerformDeserializer(TrackingDataDeserializer[StatsPerformInputs]):
 
         with performance_logging("Loading tracking data", logger=logger):
             frame_rate = self.__get_frame_rate(tracking_data)
+            pitch_size_length = 100
+            pitch_size_width = 100
 
-            transformer = self.get_transformer()
+            transformer = self.get_transformer(
+                length=pitch_size_length,
+                width=pitch_size_width,
+            )
 
             def _iter():
                 n = 0

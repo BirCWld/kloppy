@@ -46,7 +46,10 @@ class HTTPAdapter(Adapter):
         if basic_authentication:
             auth = requests.auth.HTTPBasicAuth(*basic_authentication)
 
-        with requests.get(url, stream=True, auth=auth) as r:
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36"
+        }
+        with requests.get(url, stream=True, auth=auth, headers=headers) as r:
             if r.status_code == 404:
                 raise InputNotFoundError(f"Could not find {url}")
 

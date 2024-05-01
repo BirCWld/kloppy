@@ -29,17 +29,7 @@ if sys.version_info >= (3, 11):
 else:
     from typing_extensions import Self
 
-from .pitch import (
-    PitchDimensions,
-    Unit,
-    Point,
-    Dimension,
-    NormalizedPitchDimensions,
-    MetricPitchDimensions,
-    ImperialPitchDimensions,
-    OptaPitchDimensions,
-    WyscoutPitchDimensions,
-)
+from .pitch import PitchDimensions, Point, Dimension
 from .formation import FormationType
 from ...exceptions import (
     OrientationError,
@@ -96,6 +86,8 @@ class Provider(Enum):
         KLOPPY:
         DATAFACTORY:
         STATSPERFORM:
+        HAWKEYE:
+        UEFA:
     """
 
     METRICA = "metrica"
@@ -109,6 +101,8 @@ class Provider(Enum):
     KLOPPY = "kloppy"
     DATAFACTORY = "datafactory"
     STATSPERFORM = "statsperform"
+    HAWKEYE = "hawkeye"
+    UEFA = "uefa"
     OTHER = "other"
 
     def __str__(self):
@@ -271,7 +265,7 @@ class Period:
         ):
             return self.start_timestamp <= timestamp <= self.end_timestamp
         raise KloppyError(
-            "This method can only be used when start_timestamp and end_timestamp are a datetime"
+            "This method can only be used when start_timestamp and end_timmestamp are a datetime"
         )
 
     @property
@@ -459,8 +453,9 @@ class Origin(Enum):
 
 @dataclass
 class CoordinateSystem(ABC):
-    pitch_length: Optional[float] = None
-    pitch_width: Optional[float] = None
+    normalized: bool
+    length: float = None
+    width: float = None
 
     def __eq__(self, other):
         if isinstance(other, CoordinateSystem):
@@ -492,10 +487,6 @@ class CoordinateSystem(ABC):
     def pitch_dimensions(self) -> PitchDimensions:
         raise NotImplementedError
 
-    @property
-    def normalized(self) -> bool:
-        return isinstance(self.pitch_dimensions, NormalizedPitchDimensions)
-
 
 @dataclass
 class KloppyCoordinateSystem(CoordinateSystem):
@@ -513,21 +504,17 @@ class KloppyCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        if self.pitch_length is not None and self.pitch_width is not None:
-            return NormalizedPitchDimensions(
+        if self.length is not None and self.width is not None:
+            return PitchDimensions(
                 x_dim=Dimension(0, 1),
                 y_dim=Dimension(0, 1),
-                pitch_length=self.pitch_length,
-                pitch_width=self.pitch_width,
-                standardized=False,
+                length=self.length,
+                width=self.width,
             )
         else:
-            return NormalizedPitchDimensions(
+            return PitchDimensions(
                 x_dim=Dimension(0, 1),
                 y_dim=Dimension(0, 1),
-                pitch_length=105,
-                pitch_width=68,
-                standardized=True,
             )
 
 
@@ -554,13 +541,12 @@ class TracabCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        return MetricPitchDimensions(
-            x_dim=Dimension(-1 * self.pitch_length / 2, self.pitch_length / 2),
-            y_dim=Dimension(-1 * self.pitch_width / 2, self.pitch_width / 2),
-            pitch_length=self.pitch_length,
-            pitch_width=self.pitch_width,
-            standardized=False,
-        ).convert(to_unit=Unit.CENTIMETERS)
+        return PitchDimensions(
+            x_dim=Dimension(-1 * self.length * 100 / 2, self.length * 100 / 2),
+            y_dim=Dimension(-1 * self.width * 100 / 2, self.width * 100 / 2),
+            length=self.length,
+            width=self.width,
+        )
 
 
 @dataclass
@@ -579,12 +565,11 @@ class SecondSpectrumCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        return MetricPitchDimensions(
-            x_dim=Dimension(-1 * self.pitch_length / 2, self.pitch_length / 2),
-            y_dim=Dimension(-1 * self.pitch_width / 2, self.pitch_width / 2),
-            pitch_length=self.pitch_length,
-            pitch_width=self.pitch_width,
-            standardized=False,
+        return PitchDimensions(
+            x_dim=Dimension(-1 * self.length / 2, self.length / 2),
+            y_dim=Dimension(-1 * self.width / 2, self.width / 2),
+            length=self.length,
+            width=self.width,
         )
 
 
@@ -604,8 +589,9 @@ class OptaCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        return OptaPitchDimensions(
-            pitch_length=self.pitch_length, pitch_width=self.pitch_width
+        return PitchDimensions(
+            x_dim=Dimension(0, 100),
+            y_dim=Dimension(0, 100),
         )
 
 
@@ -625,12 +611,11 @@ class SportecEventDataCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        return MetricPitchDimensions(
-            x_dim=Dimension(0, self.pitch_length),
-            y_dim=Dimension(0, self.pitch_width),
-            pitch_length=self.pitch_length,
-            pitch_width=self.pitch_width,
-            standardized=False,
+        return PitchDimensions(
+            x_dim=Dimension(0, self.length),
+            y_dim=Dimension(0, self.width),
+            length=self.length,
+            width=self.width,
         )
 
 
@@ -650,12 +635,11 @@ class SportecTrackingDataCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        return MetricPitchDimensions(
-            x_dim=Dimension(-self.pitch_length / 2, self.pitch_length / 2),
-            y_dim=Dimension(-self.pitch_width / 2, self.pitch_width / 2),
-            pitch_length=self.pitch_length,
-            pitch_width=self.pitch_width,
-            standardized=False,
+        return PitchDimensions(
+            x_dim=Dimension(-self.length / 2, self.length / 2),
+            y_dim=Dimension(-self.width / 2, self.width / 2),
+            length=self.length,
+            width=self.width,
         )
 
 
@@ -675,12 +659,9 @@ class StatsBombCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        return ImperialPitchDimensions(
+        return PitchDimensions(
             x_dim=Dimension(0, 120),
             y_dim=Dimension(0, 80),
-            pitch_length=self.pitch_length,
-            pitch_width=self.pitch_width,
-            standardized=True,
         )
 
 
@@ -699,8 +680,9 @@ class WyscoutCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        return WyscoutPitchDimensions(
-            pitch_length=self.pitch_length, pitch_width=self.pitch_width
+        return PitchDimensions(
+            x_dim=Dimension(0, 100),
+            y_dim=Dimension(0, 100),
         )
 
 
@@ -720,12 +702,11 @@ class SkillCornerCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        return MetricPitchDimensions(
-            x_dim=Dimension(-1 * self.pitch_length / 2, self.pitch_length / 2),
-            y_dim=Dimension(-1 * self.pitch_width / 2, self.pitch_width / 2),
-            pitch_length=self.pitch_length,
-            pitch_width=self.pitch_width,
-            standardized=False,
+        return PitchDimensions(
+            x_dim=Dimension(-1 * self.length / 2, self.length / 2),
+            y_dim=Dimension(-1 * self.width / 2, self.width / 2),
+            length=self.length,
+            width=self.width,
         )
 
 
@@ -745,22 +726,10 @@ class DatafactoryCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        if self.pitch_length is not None and self.pitch_width is not None:
-            return NormalizedPitchDimensions(
-                x_dim=Dimension(-1, 1),
-                y_dim=Dimension(-1, 1),
-                pitch_length=self.pitch_length,
-                pitch_width=self.pitch_width,
-                standardized=False,
-            )
-        else:
-            return NormalizedPitchDimensions(
-                x_dim=Dimension(-1, 1),
-                y_dim=Dimension(-1, 1),
-                pitch_length=105,
-                pitch_width=68,
-                standardized=True,
-            )
+        return PitchDimensions(
+            x_dim=Dimension(-1, 1),
+            y_dim=Dimension(-1, 1),
+        )
 
 
 @dataclass
@@ -779,13 +748,58 @@ class StatsPerformCoordinateSystem(CoordinateSystem):
 
     @property
     def pitch_dimensions(self) -> PitchDimensions:
-        # FIXME: This does not seem correct
-        return NormalizedPitchDimensions(
+        return PitchDimensions(
             x_dim=Dimension(0, 100),
             y_dim=Dimension(0, 100),
-            pitch_length=105,
-            pitch_width=68,
-            standardized=True,
+            length=self.length,
+            width=self.width,
+        )
+
+@dataclass
+class HawkEyeCoordinateSystem(CoordinateSystem):
+    @property
+    def provider(self) -> Provider:
+        return Provider.HAWKEYE
+
+    @property
+    def origin(self) -> Origin:
+        return Origin.CENTER
+
+    @property
+    def vertical_orientation(self) -> VerticalOrientation:
+        return VerticalOrientation.BOTTOM_TO_TOP
+
+    @property
+    def pitch_dimensions(self) -> PitchDimensions:
+        return PitchDimensions(
+            x_dim=Dimension(-1 * self.length / 2, self.length / 2),
+            y_dim=Dimension(-1 * self.width / 2, self.width / 2),
+            length=self.length,
+            width=self.width,
+        )
+
+
+@dataclass
+class UefaCoordinateSystem(CoordinateSystem):
+    @property
+    def provider(self) -> Provider:
+        return Provider.UEFA
+
+    @property
+    def origin(self) -> Origin:
+        return Origin.BOTTOM_LEFT
+
+    @property
+    def vertical_orientation(self) -> VerticalOrientation:
+        return VerticalOrientation.BOTTOM_TO_TOP
+
+    @property
+    def pitch_dimensions(self) -> PitchDimensions:
+        return PitchDimensions(
+            x_dim=Dimension(0, 105),
+            y_dim=Dimension(0, 68),
+            length=self.length,
+            width=self.width,
         )
 
 
@@ -808,51 +822,51 @@ class DatasetType(Enum):
 
 
 def build_coordinate_system(
-    provider: Provider,
-    dataset_type: DatasetType = DatasetType.EVENT,
-    pitch_length: Optional[float] = None,
-    pitch_width: Optional[float] = None,
-) -> CoordinateSystem:
-    """Build a coordinate system for a given provider and dataset type.
+    provider: Provider, dataset_type: DatasetType = DatasetType.EVENT, **kwargs
+):
+    if provider == Provider.TRACAB:
+        return TracabCoordinateSystem(normalized=False, **kwargs)
 
-    Args:
-        provider: The provider of the dataset.
-        dataset_type: The type of the dataset.
-        pitch_length: The real length of the pitch.
-        pitch_width: The real width of the pitch.
+    if provider == Provider.KLOPPY:
+        return KloppyCoordinateSystem(normalized=True, **kwargs)
 
-    Returns:
-        The coordinate system for the given provider and dataset type.
-    """
-    coordinate_systems = {
-        Provider.TRACAB: TracabCoordinateSystem,
-        Provider.KLOPPY: KloppyCoordinateSystem,
-        Provider.METRICA: MetricaCoordinateSystem,
-        Provider.OPTA: OptaCoordinateSystem,
-        Provider.SPORTEC: {
-            DatasetType.EVENT: SportecEventDataCoordinateSystem,
-            DatasetType.TRACKING: SportecTrackingDataCoordinateSystem,
-        },
-        Provider.STATSBOMB: StatsBombCoordinateSystem,
-        Provider.WYSCOUT: WyscoutCoordinateSystem,
-        Provider.SKILLCORNER: SkillCornerCoordinateSystem,
-        Provider.DATAFACTORY: DatafactoryCoordinateSystem,
-        Provider.SECONDSPECTRUM: SecondSpectrumCoordinateSystem,
-        Provider.STATSPERFORM: StatsPerformCoordinateSystem,
-    }
+    if provider == Provider.METRICA:
+        return MetricaCoordinateSystem(normalized=True, **kwargs)
 
-    if provider in coordinate_systems:
-        if isinstance(coordinate_systems[provider], dict):
-            assert dataset_type in coordinate_systems[provider]
-            return coordinate_systems[provider][dataset_type](
-                pitch_length=pitch_length, pitch_width=pitch_width
+    if provider == Provider.OPTA:
+        return OptaCoordinateSystem(normalized=False, **kwargs)
+
+    if provider == Provider.SPORTEC:
+        if dataset_type == DatasetType.TRACKING:
+            return SportecTrackingDataCoordinateSystem(
+                normalized=False, **kwargs
             )
         else:
-            return coordinate_systems[provider](
-                pitch_length=pitch_length, pitch_width=pitch_width
-            )
-    else:
-        raise ValueError(f"Invalid provider: {provider}")
+            return SportecEventDataCoordinateSystem(normalized=False, **kwargs)
+
+    if provider == Provider.STATSBOMB:
+        return StatsBombCoordinateSystem(normalized=False, **kwargs)
+
+    if provider == Provider.WYSCOUT:
+        return WyscoutCoordinateSystem(normalized=False, **kwargs)
+
+    if provider == Provider.SKILLCORNER:
+        return SkillCornerCoordinateSystem(normalized=False, **kwargs)
+
+    if provider == Provider.DATAFACTORY:
+        return DatafactoryCoordinateSystem(normalized=False, **kwargs)
+
+    if provider == Provider.SECONDSPECTRUM:
+        return SecondSpectrumCoordinateSystem(normalized=False, **kwargs)
+
+    if provider == Provider.STATSPERFORM:
+        return StatsPerformCoordinateSystem(normalized=False, **kwargs)
+
+    if provider == Provider.HAWKEYE:
+        return HawkEyeCoordinateSystem(normalized=False, **kwargs)
+
+    if provider == Provider.UEFA:
+        return UefaCoordinateSystem(normalized=False, **kwargs)
 
 
 class DatasetFlag(Flag):

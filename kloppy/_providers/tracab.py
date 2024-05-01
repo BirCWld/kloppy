@@ -1,15 +1,11 @@
-from typing import Optional, Union, Type
-
+from typing import Optional
 
 from kloppy.domain import TrackingDataset
-from kloppy.infra.serializers.tracking.tracab.tracab_dat import (
-    TRACABDatDeserializer,
-)
-from kloppy.infra.serializers.tracking.tracab.tracab_json import (
-    TRACABJSONDeserializer,
+from kloppy.infra.serializers.tracking.tracab import (
+    TRACABDeserializer,
     TRACABInputs,
 )
-from kloppy.io import FileLike, open_as_file, get_file_extension
+from kloppy.io import FileLike, open_as_file
 
 
 def load(
@@ -19,16 +15,8 @@ def load(
     limit: Optional[int] = None,
     coordinates: Optional[str] = None,
     only_alive: Optional[bool] = True,
-    file_format: Optional[str] = None,
 ) -> TrackingDataset:
-    if file_format == "dat":
-        deserializer_class = TRACABDatDeserializer
-    elif file_format == "json":
-        deserializer_class = TRACABJSONDeserializer
-    else:
-        deserializer_class = identify_deserializer(meta_data, raw_data)
-
-    deserializer = deserializer_class(
+    deserializer = TRACABDeserializer(
         sample_rate=sample_rate,
         limit=limit,
         coordinate_system=coordinates,
@@ -40,22 +28,3 @@ def load(
         return deserializer.deserialize(
             inputs=TRACABInputs(meta_data=meta_data_fp, raw_data=raw_data_fp)
         )
-
-
-def identify_deserializer(
-    meta_data: FileLike,
-    raw_data: FileLike,
-) -> Union[Type[TRACABDatDeserializer], Type[TRACABJSONDeserializer]]:
-    meta_data_extension = get_file_extension(meta_data)
-    raw_data_extension = get_file_extension(raw_data)
-
-    if meta_data_extension == ".xml" and raw_data_extension == ".dat":
-        deserializer = TRACABDatDeserializer
-    elif meta_data_extension == ".json" and raw_data_extension == ".json":
-        deserializer = TRACABJSONDeserializer
-    else:
-        raise ValueError(
-            "Tracab file format could not be recognized, please specify"
-        )
-
-    return deserializer

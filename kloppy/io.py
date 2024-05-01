@@ -1,6 +1,7 @@
 import contextlib
 import logging
 import os
+import gzip
 import urllib.parse
 from dataclasses import dataclass, replace
 from pathlib import PurePath
@@ -32,17 +33,6 @@ class Source:
 
 
 FileLike = Union[str, PurePath, bytes, IO[bytes], Source]
-
-
-def get_file_extension(f: FileLike) -> str:
-    if isinstance(f, str):
-        return os.path.splitext(f)[1]
-    elif isinstance(f, PurePath):
-        return os.path.splitext(f.name)[1]
-    elif isinstance(f, Source):
-        return get_file_extension(f.data)
-    else:
-        raise Exception("Could not determine extension")
 
 
 def get_local_cache_stream(url: str, cache_dir: str) -> Tuple[BinaryIO, bool]:
@@ -113,8 +103,10 @@ def open_as_file(input_: FileLike) -> IO:
             else:
                 if not os.path.exists(input_):
                     raise InputNotFoundError(f"File {input_} does not exist")
-
-                stream = _open(input_, "rb")
+                if input_.endswith(".gz"):
+                    stream = gzip.open(input_, "rb")
+                else:
+                    stream = _open(input_, "rb")
             return stream
     elif isinstance(input_, bytes):
         return BytesIO(input_)

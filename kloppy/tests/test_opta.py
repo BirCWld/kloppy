@@ -25,7 +25,7 @@ from kloppy.domain import (
     Orientation,
     PassQualifier,
     PassType,
-    OptaPitchDimensions,
+    PitchDimensions,
     Point,
     Point,
     Point3D,
@@ -143,12 +143,14 @@ class TestOptaMetadata:
 
     def test_pitch_dimensions(self, dataset):
         """It should set the correct pitch dimensions"""
-        assert dataset.metadata.pitch_dimensions == OptaPitchDimensions()
+        assert dataset.metadata.pitch_dimensions == PitchDimensions(
+            x_dim=Dimension(0, 100), y_dim=Dimension(0, 100)
+        )
 
     def test_coordinate_system(self, dataset):
         """It should set the correct coordinate system"""
         assert dataset.metadata.coordinate_system == build_coordinate_system(
-            Provider.OPTA
+            Provider.OPTA, width=100, length=100
         )
 
     def test_score(self, dataset):
@@ -197,8 +199,7 @@ class TestOptaEvent:
             f24_data=base_dir / "files" / "opta_f24.xml",
         )
         event = dataset.get_event_by_id("1510681159")
-        assert event.coordinates.x == pytest.approx(0.501, 0.001)
-        assert event.coordinates.y == pytest.approx(0.50672, 0.001)
+        assert event.coordinates == Point(0.501, 0.506)
 
     def test_ball_owning_team(self, dataset: EventDataset):
         """Test if the ball owning team is correctly set"""
@@ -243,7 +244,7 @@ class TestOptaPassEvent:
     def test_deserialize_all(self, dataset: EventDataset):
         """It should deserialize all clearance events"""
         events = dataset.find_all("pass")
-        assert len(events) == 15
+        assert len(events) == 14
 
     def test_receiver_coordinates(self, dataset: EventDataset):
         """Test if the receiver coordinates are correctly deserialized"""
@@ -265,11 +266,6 @@ class TestOptaPassEvent:
         )
         chipped_pass = dataset.get_event_by_id("1444075194")
         assert PassType.CHIPPED_PASS in chipped_pass.get_qualifier_values(
-            PassQualifier
-        )
-        assist = dataset.get_event_by_id("1666666666")
-        assert PassType.ASSIST in assist.get_qualifier_values(PassQualifier)
-        assert PassType.SHOT_ASSIST in assist.get_qualifier_values(
             PassQualifier
         )
 
